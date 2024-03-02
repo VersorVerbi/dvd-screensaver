@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DVD Screensaver</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        #screensaver {
+            width: 100%;
+        }
+        #settings {
+            position: fixed;
+            left: 100%;
+            top: 32px;
+            transition: left 100ms ease-in-out;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            width: 200px;
+            z-index: 11;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #settings.visible {
+            left: calc(100% - 200px);
+        }
+        input {
+            max-width: 75px;
+        }
+        #settings label, #settings select, #settings input {
+            flex-basis: 45%;
+            flex-grow: 1;
+            flex-shrink: 1;
+        }
+        #settings-hover {
+            position: fixed;
+            width: 200px;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+<div id="settings-hover" onmouseenter="showSettings()" onmouseleave="hideSettings()">
+<form id="settings">
+    <label for="ratio">Aspect ratio:</label>
+    <select id="ratio" onchange="setRatio()">
+        <option>4:3</option>
+        <option>16:9</option>
+        <option>16:10</option>
+        <option>21:9</option>
+        <option>32:9</option>
+    </select>
+    <label for="speed">Speed:</label>
+    <input type="number" id="speed" value="1" min="1" max="10" step="1" onchange="setSpeed()" />
+    <label for="icon">Icon:</label>
+    <input type="file" accept="image/svg+xml" id="icon" name="icon" onchange="setIcon()" />
+</form>
+</div>
+<canvas id="screensaver" height="768" width="1024">
+    Your device/browser/OS does not support &lt;canvas&gt; elements. Otherwise you would see the old DVD screensaver of a bouncing icon.
+</canvas>
+<script>
+    function radiansToDegrees(r) {
+        return r * 180 / Math.PI;
+    }
+
+    function moveIcon() {
+        if (!icon.dir) {
+            icon.dir = Math.random() * 2 * Math.PI; // radians
+        }
+        const { x, y } = icon;
+
+        // x - x1 = d cos(theta)
+        let newX = speed.constant * Math.cos(icon.dir) + x;
+        // y - y1 = d sin(theta)
+        // but we have to reverse the direction, because up = positive in Cartesian geometry but up = negative on an HTML canvas
+        let newY = -speed.constant * Math.sin(icon.dir) + y;
+
+        //console.log('(', x, ',', y, ') to (', newX, ',', newY, ') @', radiansToDegrees(icon.dir), 'degrees');
+
+        const dirBeforeChange = icon.dir;
+
+        let tooFarLeft = newX < 0;
+        let tooFarRight = (newX + icon.dw) > canvasDimensions.width;
+        let tooFarUp = newY < 0;
+        let tooFarDown = (newY + icon.dh) > canvasDimensions.height;
+
+        while (tooFarLeft || tooFarRight || tooFarUp || tooFarDown) {
+            // can't go outside, must bounce back
+
+            if ((tooFarLeft || tooFarRight) && (tooFarUp || tooFarDown)) {
+                // exact reversal
+                icon.dir += Math.PI;
+            } else if (tooFarLeft) {
+                if (icon.dir < Math.PI) { // going up
+                    const old = icon.dir;
+                    const perpendicular = Math.PI;
+                    // angle of incidence
+                    const aoi = perpendicular - icon.dir;
+                    // angle of reflection, above the x-axis
+                    icon.dir = aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                } else {
+                    const old = icon.dir;
+                    // calculate angle of incidence
+                    const perpendicular = Math.PI; // x-axis
+                    const aoi = icon.dir - perpendicular;
+                    // angle of reflection is the same, this time below the x-axis
+                    icon.dir = 2 * Math.PI - aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                }
+            } else if (tooFarRight) {
+                if (icon.dir < Math.PI) { // going up
+                    const old = icon.dir;
+                    // perpendicular = 0;
+                    const aoi = icon.dir;
+                    icon.dir = Math.PI - aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(0), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                } else {
+                    const old = icon.dir;
+                    const perpendicular = 2 * Math.PI;
+                    const aoi = perpendicular - icon.dir;
+                    icon.dir = Math.PI + aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                }
+            } else if (tooFarUp) {
+                if (icon.dir > (Math.PI / 2)) { // going left
+                    const old = icon.dir;
+                    const perpendicular = Math.PI / 2;
+                    const aoi = icon.dir - perpendicular;
+                    icon.dir = 3 * Math.PI / 2 - aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                } else {
+                    const old = icon.dir;
+                    const perpendicular = Math.PI / 2;
+                    const aoi = perpendicular - icon.dir;
+                    icon.dir = 3 * Math.PI / 2 + aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                }
+            } else { // tooFarDown
+                if (icon.dir < (3 * Math.PI / 2)) { // going left
+                    const old = icon.dir;
+                    const perpendicular = 3 * Math.PI / 2;
+                    const aoi = perpendicular - icon.dir;
+                    icon.dir = Math.PI / 2 + aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                } else {
+                    const old = icon.dir;
+                    const perpendicular = 3 * Math.PI / 2;
+                    const aoi = icon.dir - perpendicular;
+                    icon.dir = Math.PI / 2 - aoi;
+                    //console.log('Perpendicular:', radiansToDegrees(perpendicular), 'Old direction:', radiansToDegrees(old), 'Angle of Incidence/Reflection:', radiansToDegrees(aoi), 'New direction:', radiansToDegrees(icon.dir));
+                }
+            }
+
+            // introduce variance
+            const plusOrMinus = Math.random() < 0.5 ? -1 : 1;
+            const amount = Math.random() * 0.01; // radians
+            icon.dir += (amount * plusOrMinus);
+
+            if (tooFarLeft) {
+                // x - x1 = d cos(theta)
+                // d = (x - x1) / cos(theta_old)
+                const distancePast = newX / Math.cos(dirBeforeChange);
+                // find Y at x = 0
+                // y1 = -d sin(theta) - y ==> but again negated for reversing Y directions
+                const yAtZero = -distancePast * Math.sin(dirBeforeChange) + newY;
+                newX = distancePast * Math.cos(icon.dir);
+                newY = -distancePast * Math.sin(icon.dir) + yAtZero;
+                //console.log('Went', distancePast, 'beyond the Y-axis, crossing at (0,', yAtZero ,'), now reversing to (', newX, ',', newY, ')');
+            } else if (tooFarRight) {
+                const distancePast = ((newX + icon.dw) - canvasDimensions.width) / Math.cos(dirBeforeChange);
+                const yAtMark = -distancePast * Math.sin(dirBeforeChange) + newY;
+                newX = distancePast * Math.cos(icon.dir) + (canvasDimensions.width - icon.dw);
+                newY = -distancePast * Math.sin(icon.dir) + yAtMark;
+                //console.log('Went', distancePast, 'beyond the right edge of the box, crossing at (', canvasDimensions.width - icon.dw, ',', yAtMark, '), now reversing to (', newX, ',', newY, ')');
+            } else if (tooFarUp) {
+                const distancePast = newY / Math.sin(dirBeforeChange);
+                // x - x1 = d cos(theta)
+                // x1 = -(d cos(theta) - x)
+                const xAtZero = distancePast * Math.cos(dirBeforeChange) + newX;
+                newX = -distancePast * Math.cos(icon.dir) + xAtZero;
+                newY = distancePast * Math.sin(icon.dir);
+                //console.log('Went', distancePast, 'beyond the X-axis, crossing at (', xAtZero, ', 0), now reversing to (', newX, ',', newY, ')');
+            } else if (tooFarDown) {
+                const distancePast = ((newY + icon.dh) - canvasDimensions.height) / Math.sin(dirBeforeChange);
+                const xAtMark = distancePast * Math.cos(dirBeforeChange) + newX;
+                newX = -distancePast * Math.cos(icon.dir) + xAtMark;
+                newY = distancePast * Math.sin(icon.dir) + (canvasDimensions.height - icon.dh);
+                //console.log('Went', distancePast, 'beyond the bottom edge of the box, crossing at (', xAtMark, ',', canvasDimensions.height - icon.dh, '), now reversing to (', newX, ',', newY, ')');
+            }
+
+            if (isNaN(newX) || isNaN(newY)) debugger;
+
+            tooFarLeft = newX < 0;
+            tooFarRight = (newX + icon.dw) > canvasDimensions.width;
+            tooFarUp = newY < 0;
+            tooFarDown = (newY + icon.dh) > canvasDimensions.height;
+        }
+
+        icon.x = newX;
+        icon.y = newY;
+    }
+
+    function draw() {
+        const canvas = document.getElementById('screensaver');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvasDimensions.width, canvasDimensions.height);
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvasDimensions.width, canvasDimensions.height);
+
+        if (!icon.svg) return;
+
+        moveIcon();
+        ctx.drawImage(icon.svg, icon.x, icon.y, icon.dw, icon.dh);
+
+        window.requestAnimationFrame(draw);
+    }
+
+    function setRatio() {
+        const newRatio = document.getElementById('ratio')?.value;
+        const canvas = document.getElementById('screensaver');
+        switch(newRatio) {
+            case "32:9":
+                canvasDimensions.width = 3200;
+                canvasDimensions.height = 900;
+                break;
+            case "21:9":
+                canvasDimensions.width = 2100;
+                canvasDimensions.height = 900;
+                break;
+            case "16:10":
+                canvasDimensions.width = 1600;
+                canvasDimensions.height = 1000;
+                break;
+            case "16:9":
+                canvasDimensions.width = 1600;
+                canvasDimensions.height = 900;
+                break;
+            case "4:3":
+            default:
+                canvasDimensions.width = 1024;
+                canvasDimensions.height = 768;
+                break;
+        }
+        canvas.width = canvasDimensions.width;
+        canvas.height = canvasDimensions.height;
+    }
+
+    function setSpeed() {
+        const newSpeed = parseInt(document.getElementById('speed')?.value);
+        if (!isNaN(newSpeed) && newSpeed) {
+            switch (newSpeed) {
+                case 10:
+                    speed.constant = 8;
+                    break;
+                case 9:
+                    speed.constant = 6;
+                    break;
+                case 8:
+                    speed.constant = 4;
+                    break;
+                case 7:
+                    speed.constant = 3;
+                    break;
+                case 6:
+                    speed.constant = 2.5;
+                    break;
+                case 5:
+                    speed.constant = 2;
+                    break;
+                case 4:
+                    speed.constant = 1.75;
+                    break;
+                case 3:
+                    speed.constant = 1.5;
+                    break;
+                case 2:
+                    speed.constant = 1.25;
+                    break;
+                case 1:
+                default:
+                    speed.constant = 1.1;
+                    break;
+            }
+        }
+    }
+
+    function setIcon() {
+        const fInput = document.getElementById('icon');
+        if (fInput.files) {
+            const f = fInput.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const i = new Image;
+                i.onload = () => {
+                    requestAnimationFrame(() => {
+                        icon.w = i.naturalWidth;
+                        icon.h = i.naturalHeight;
+                        icon.dw = 300;
+                        icon.dh = (300 / icon.w) * icon.h;
+                        icon.svg = i;
+                        icon.x = 0;
+                        icon.y = 0;
+                        icon.dir = null;
+                        requestAnimationFrame(draw);
+                    })
+                }
+                i.src = e.target.result.toString();
+            }
+            reader.readAsDataURL(f);
+        }
+    }
+
+    function showSettings() {
+        document.getElementById('settings').classList.add('visible');
+    }
+
+    function hideSettings() {
+        document.getElementById('settings').classList.remove('visible');
+    }
+
+    const canvasDimensions = { width: 0, height: 0 };
+    setRatio();
+    const speed = { constant: 0 };
+    setSpeed();
+
+    const icon = { x: 0, y: 0, w: 0, h: 0, svg: '', dir: null };
+    setIcon();
+</script>
+</body>
+</html>
