@@ -310,8 +310,8 @@
                     requestAnimationFrame(() => {
                         icon.w = i.naturalWidth;
                         icon.h = i.naturalHeight;
-                        icon.dw = 300;
-                        icon.dh = (300 / icon.w) * icon.h;
+                        icon.dw = TARGET_WIDTH;
+                        icon.dh = (TARGET_WIDTH / icon.w) * icon.h;
                         icon.svg = i;
                         icon.x = 0;
                         icon.y = 0;
@@ -332,6 +332,8 @@
     function hideSettings() {
         document.getElementById('settings').classList.remove('visible');
     }
+
+    const TARGET_WIDTH = 100;
 
     const canvasDimensions = { width: 0, height: 0 };
     setRatio();
